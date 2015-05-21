@@ -15,14 +15,28 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.utils.Converters;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity  implements View.OnClickListener, CvCameraViewListener2 {
 
     private static final String TAG = "Main";
     private static final Size BLUR_SIZE = new Size(5, 5);
+
+    private static final int THRESHOLD_HOUGH = 50;
+    private static final int MIN_LINE_SIZE = 20;
+    private static final int LINE_GAP = 20;
+    private static final Scalar RED = new Scalar(255, 0, 0);
 
     static {
         if (!OpenCVLoader.initDebug()) {
@@ -73,9 +87,6 @@ public class MainActivity extends Activity  implements View.OnClickListener, CvC
             case R.id.button_reset:
                 Log.d(TAG, "reset");
                 isAttemptSolve = false;
-                if (mOpenCvCameraView != null) {
-                    mOpenCvCameraView.enableView();
-                }
                 break;
 
             default:
@@ -134,17 +145,65 @@ public class MainActivity extends Activity  implements View.OnClickListener, CvC
 
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-        if (isAttemptSolve && isFinished) {
-            mOpenCvCameraView.disableView();
-        } else if (isAttemptSolve && !isFinished) {
-            Imgproc.GaussianBlur(frame, frame, BLUR_SIZE, 0);
-            Imgproc.adaptiveThreshold(frame, frame, 255, Imgproc.THRESH_BINARY, 1, 19, 2);
-            isFinished = true;
+        Mat dest = inputFrame.gray();
+        if (isAttemptSolve) {
+
+            Mat lines = new Mat();
+            Mat kern = new Mat();
+            List<MatOfPoint> contours = new ArrayList<>();
+            List<MatOfPoint2f> contours2f = new ArrayList<>();
+            Mat hier = new Mat();
+            Imgproc.Canny(dest, dest, 100, 100);
+            Imgproc.GaussianBlur(dest, dest, BLUR_SIZE, 0);
+            Imgproc.adaptiveThreshold(dest, dest, 255, Imgproc.THRESH_BINARY, 1, 19, 2);
+            Imgproc.erode(dest, dest, kern);
+            Imgproc.dilate(dest, dest, kern);
+            //Imgproc.findContours(dest, contours, hier, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
+            /*
+
+            MatOfPoint2f largest = new MatOfPoint2f();
+            double maxArea = 0;
+
+            for (MatOfPoint contour : contours) {
+                double area = Imgproc.contourArea(contour);
+                if (area > 100.0) {
+                    double peripheral = Imgproc.arcLength(new MatOfPoint2f(contour.toArray()), true);
+                    MatOfPoint2f approx = new MatOfPoint2f();
+                    Imgproc.approxPolyDP(new MatOfPoint2f(contour.toArray()), approx , 0.02*peripheral, true);
+                    if (area > maxArea && approx.toList().size() == 4) {
+                        largest = approx;
+                        maxArea = area;
+                    }
+                }
+            }
+
+            if (largest.toList().size() != 4) {
+                Point[] points = largest.toArray();
+                Core.line(dest, points[0], points[1], RED);
+                Core.line(dest, points[1], points[2], RED);
+                Core.line(dest, points[2], points[3], RED);
+                Core.line(dest, points[3], points[4], RED);
+            } else {
+                Log.d(TAG, "didnt find square");
+            }
+
+            Imgproc.HoughLines(dest, lines, 1, Math.PI/180, THRESHOLD_HOUGH, MIN_LINE_SIZE, LINE_GAP);
+            for (int x = 0; x < lines.cols(); x++) {
+                double[] vec = lines.get(0, x);
+                double x1 = vec[0],
+                        y1 = vec[1],
+                        x2 = vec[2],
+                        y2 = vec[3];
+                Point start = new Point(x1, y1);
+                Point end = new Point(x2, y2);
+
+                Core.line(dest, start, end, RED, 10);
+            }
+            */
         } else if (!isAttemptSolve){
-            frame = inputFrame.gray();
-            isFinished = false;
+            //empty
         }
 
-        return frame;
+        return dest;
     }
 }
