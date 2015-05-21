@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-android:layout_width="match_parent"
-android:layout_height="match_parent"
-android:orientation="vertical" >
+    xmlns:opencv="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
 
-<FrameLayout
-    android:id="@+id/camera_preview"
+
+<org.opencv.android.JavaCameraView
     android:layout_width="fill_parent"
-    android:layout_height="fill_parent"/>
+    android:layout_height="fill_parent"
+    android:visibility="gone"
+    android:id="@+id/camera_preview"
+    android:orientation="vertical"
+    opencv:show_fps="true"
+    opencv:camera_id="any" />
 
 <!-- Buttons -->
 <LinearLayout
@@ -20,19 +26,18 @@ android:orientation="vertical" >
     android:paddingRight="20dp" >
 
     <Button
-        android:id="@+id/button_capture"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_gravity="start"
-        android:layout_weight="1"
-        android:text="Recognise"/>
-
-    <Button
         android:id="@+id/button_hint"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_gravity="end"
         android:layout_weight="1"
-        android:text="Hint"/>
+        android:text="Give me a Hint"/>
+    <Button
+        android:id="@+id/button_reset"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_weight="1"
+        android:text="Reset"/>
 </LinearLayout>
 </RelativeLayout>

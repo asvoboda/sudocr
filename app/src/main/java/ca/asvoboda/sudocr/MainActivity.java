@@ -1,115 +1,150 @@
 package ca.asvoboda.sudocr;
 
 import android.app.Activity;
-import android.content.Intent;
-import android.hardware.Camera;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.view.SurfaceView;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.FrameLayout;
 
 import org.asvoboda.sudocr.R;
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
 
-public class MainActivity extends Activity  implements View.OnClickListener {
+public class MainActivity extends Activity  implements View.OnClickListener, CvCameraViewListener2 {
 
     private static final String TAG = "Main";
+    private static final Size BLUR_SIZE = new Size(5, 5);
 
-    private FrameLayout mLayout;
-    private Camera mCamera;
-    private CameraPreview mPreview;
+    static {
+        if (!OpenCVLoader.initDebug()) {
+            Log.d(TAG, "Failed to load OpenCV module");
+        }
+    }
 
-        @Override
-        public void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            setContentView(R.layout.activity_main);
+    private CameraBridgeViewBase mOpenCvCameraView;
+    private boolean isAttemptSolve = false;
+    private boolean isFinished = false;
+    private Mat frame = null;
+    private SudokuSolver solver;
 
-        Button capt = (Button) findViewById(R.id.button_capture);
-        capt.setOnClickListener(this);
-        Button hint = (Button) findViewById(R.id.button_hint);
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        Log.i(TAG, "called onCreate");
+
+        solver = new SudokuSolver();
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setContentView(R.layout.activity_main);
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.camera_preview);
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+        mOpenCvCameraView.setCvCameraViewListener(this);
+        mOpenCvCameraView.disableFpsMeter();
+
+        bindClickHandlers();
+    }
+
+    private void bindClickHandlers() {
+        Button hint = (Button)findViewById(R.id.button_hint);
         hint.setOnClickListener(this);
 
-        // Create an instance of Camera
-        mCamera = getCameraInstance();
-
-        if (mCamera == null) {
-            Log.d(TAG, "Error getting camera" );
-        }
-
-        // Create our Preview view and set it as the content of our activity.
-        mPreview = new CameraPreview(this, mCamera);
-        mLayout = (FrameLayout) findViewById(R.id.camera_preview);
-        mLayout.addView(mPreview);
+        Button reset = (Button)findViewById(R.id.button_reset);
+        reset.setOnClickListener(this);
     }
 
     @Override
     public void onClick(View v) {
-        Intent intent;
         switch (v.getId()) {
-            /*
-            case R.id.button_capture:
-                intent = new Intent(this, CameraActivity.class);
-                startActivity(intent);
-                break;
 
             case R.id.button_hint:
-                intent = new Intent(this, CameraPreviewTestActivity.class);
-                startActivity(intent);
+                Log.d(TAG, "solve for hint");
+                isAttemptSolve = true;
                 break;
-            */
+
+            case R.id.button_reset:
+                Log.d(TAG, "reset");
+                isAttemptSolve = false;
+                if (mOpenCvCameraView != null) {
+                    mOpenCvCameraView.enableView();
+                }
+                break;
+
             default:
                 break;
         }
     }
 
-    public static Camera getCameraInstance(){
-        Camera c = null;
-        try {
-            c = Camera.open(); // attempt to get a Camera instance
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS:
+                {
+                    Log.i(TAG, "OpenCV loaded successfully");
+                    mOpenCvCameraView.enableView();
+                } break;
+                default:
+                {
+                    super.onManagerConnected(status);
+                } break;
+            }
         }
-        catch (Exception e){
-            // Camera is not available (in use or does not exist)
-            Log.d(TAG, "Camera is either in use or not available");
-        }
-        return c; // returns null if camera is unavailable
+    };
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        //manually load opencv libraries instead of through the manager app
+        mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        //OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_9, this, mLoaderCallback);
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
-        releaseCamera();              // release the camera immediately on pause event
+        if (mOpenCvCameraView != null)
+            mOpenCvCameraView.disableView();
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
+    public void onDestroy() {
+        super.onDestroy();
+        if (mOpenCvCameraView != null)
+            mOpenCvCameraView.disableView();
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
+    public void onCameraViewStarted(int width, int height) {
+        //empty
     }
 
-    private void releaseCamera(){
-        mLayout.removeView(mPreview); // This is necessary.
-        mPreview = null;
-        if (mCamera != null){
-            mCamera.release();        // release the camera for other applications
-            mCamera = null;
+    @Override
+    public void onCameraViewStopped() {
+        //empty
+    }
+
+    @Override
+    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+        if (isAttemptSolve && isFinished) {
+            mOpenCvCameraView.disableView();
+        } else if (isAttemptSolve && !isFinished) {
+            Imgproc.GaussianBlur(frame, frame, BLUR_SIZE, 0);
+            Imgproc.adaptiveThreshold(frame, frame, 255, Imgproc.THRESH_BINARY, 1, 19, 2);
+            isFinished = true;
+        } else if (!isAttemptSolve){
+            frame = inputFrame.gray();
+            isFinished = false;
         }
+
+        return frame;
     }
 }
